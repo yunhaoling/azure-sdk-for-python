@@ -80,7 +80,7 @@ class EventHubClient(EventHubClientAbstract):
                 transport_type=transport_type)
 
         else:
-            get_jwt_token = functools.partial(self.credential.get_token, ['https://eventhubs.azure.net//.default'])
+            get_jwt_token = functools.partial(self.credential.get_token, 'https://eventhubs.azure.net//.default')
             return authentication.JWTTokenAsync(self.auth_uri, self.auth_uri,
                                                 get_jwt_token, http_proxy=http_proxy,
                                                 transport_type=transport_type)
