@@ -8,6 +8,18 @@ jobs:
     # Will be adding more elements to the matrix, once this has couple of succesful runs
     strategy:
       matrix:
+        MacOs_Python27:
+          OSName: 'MacOS'
+          OSVmImage: 'macOS-10.14'
+          PythonVersion: '2.7'
+        MacOs_Python37:
+          OSName: 'MacOS'
+          OSVmImage: 'macOS-10.14'
+          PythonVersion: '3.7'
+        Linux_Python35:
+          OSName: 'Linux'
+          OSVmImage: 'ubuntu-16.04'
+          PythonVersion: '3.5'
         Linux_Python37:
           OSName: 'Linux'
           OSVmImage: 'ubuntu-16.04'
