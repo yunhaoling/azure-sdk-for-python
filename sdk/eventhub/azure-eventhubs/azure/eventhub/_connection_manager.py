@@ -3,7 +3,9 @@
 # Licensed under the MIT License. See License.txt in the project root for license information.
 # --------------------------------------------------------------------------------------------
 
+from enum import Enum
 from threading import RLock
+
 from uamqp import Connection, TransportType, c_uamqp
 
 
@@ -73,6 +75,18 @@ class _SeparateConnectionManager(object):
         pass
 
 
+class ConnectionType(Enum):
+    SeparateConnection = 0
+    ShareCbsSession = 1
+    ShareConnection = 2
+
+
 def get_connection_manager(**kwargs):
-    connection_type = kwargs.get("connection_type", None)
-    return _SharedConnectionManager(**kwargs) if connection_type else _SeparateConnectionManager(**kwargs)
+    connection_type = kwargs.get("connection_type", ConnectionType.ShareCbsSession)
+
+    if connection_type == ConnectionType.SeparateConnection:
+        return _SeparateConnectionManager(**kwargs)
+    elif connection_type == ConnectionType.ShareCbsSession:
+        return _SharedConnectionManager(**kwargs)
+    else:
+        return _SharedConnectionManager(**kwargs)

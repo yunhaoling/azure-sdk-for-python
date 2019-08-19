@@ -4,6 +4,7 @@
 # --------------------------------------------------------------------------------------------
 
 from asyncio import Lock
+from azure.eventhub._connection_manager import ConnectionType
 from uamqp import TransportType, c_uamqp
 from uamqp.async_ops import ConnectionAsync
 
@@ -75,4 +76,11 @@ class _SeparateConnectionManager(object):
 
 
 def get_connection_manager(**kwargs):
-    return _SeparateConnectionManager(**kwargs)
+    connection_type = kwargs.get("connection_type", ConnectionType.ShareCbsSession)
+
+    if connection_type == ConnectionType.SeparateConnection:
+        return _SeparateConnectionManager(**kwargs)
+    elif connection_type == ConnectionType.ShareCbsSession:
+        return _SharedConnectionManager(**kwargs)
+    else:
+        return _SharedConnectionManager(**kwargs)
