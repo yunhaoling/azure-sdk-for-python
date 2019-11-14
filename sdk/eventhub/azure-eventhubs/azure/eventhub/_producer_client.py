@@ -59,7 +59,7 @@ class EventHubProducerClient(ClientBase):
         super(EventHubProducerClient, self).__init__(
             host=host, event_hub_path=event_hub_path, credential=credential,
             network_tracing=kwargs.get("logging_enable"), **kwargs)
-        self._producers = []  # type: List[EventHubProducer]
+        self._producers = {}  # type: Dict[str, EventHubProducer]
         self._client_lock = threading.Lock()
         self._producers_locks = []  # type: List[threading.Lock]
         self._max_message_size_on_link = 0

@@ -19,17 +19,27 @@ try:
 except ImportError:
     from urllib.parse import urlparse, urlencode, quote_plus
 
-import uamqp  # type: ignore
-from uamqp import Message  # type: ignore
-from uamqp import authentication  # type: ignore
-from uamqp import constants  # type: ignore
+from uamqp import (
+    AMQPClient,
+    Message,
+    authentication,
+    constants,
+    errors,
+    compat
+)
 
 from azure.eventhub import __version__
-from .exceptions import _handle_exception
+from .exceptions import _handle_exception, EventHubError
 from ._configuration import Configuration
 from ._utils import parse_sas_token
 from ._common import EventHubSharedKeyCredential, EventHubSASTokenCredential
 from ._connection_manager import get_connection_manager
+from ._constants import (
+    CONTAINER_PREFIX,
+    JWT_TOKEN_SCOPE,
+    MGMT_OPERATION,
+    MGMT_PARTITION_OPERATION
+)
 
 if TYPE_CHECKING:
     from azure.core.credentials import TokenCredential  # type: ignore
@@ -103,7 +113,7 @@ class ClientBase(object):  # pylint:disable=too-many-instance-attributes
     def __init__(self, host, event_hub_path, credential, **kwargs):
         self.eh_name = event_hub_path
         self._host = host
-        self._container_id = "eventhub.pysdk-" + str(uuid.uuid4())[:8]
+        self._container_id = CONTAINER_PREFIX + str(uuid.uuid4())[:8]
         self._address = _Address()
         self._address.hostname = host
         self._address.path = "/" + event_hub_path if event_hub_path else ""
@@ -170,8 +180,7 @@ class ClientBase(object):  # pylint:disable=too-many-instance-attributes
                 transport_type=transport_type)
 
         else:  # Azure credential
-            get_jwt_token = functools.partial(self._credential.get_token,
-                                              'https://eventhubs.azure.net//.default')
+            get_jwt_token = functools.partial(self._credential.get_token, JWT_TOKEN_SCOPE)
             return authentication.JWTTokenAuth(self._auth_uri, self._auth_uri,
                                                get_jwt_token, http_proxy=http_proxy,
                                                transport_type=transport_type)
@@ -235,7 +244,7 @@ class ClientBase(object):  # pylint:disable=too-many-instance-attributes
         :raises: :class:`EventHubError<azure.eventhub.EventHubError>`
         """
         mgmt_msg = Message(application_properties={'name': self.eh_name})
-        response = self._management_request(mgmt_msg, op_type=b'com.microsoft:eventhub')
+        response = self._management_request(mgmt_msg, op_type=MGMT_OPERATION)
         output = {}
         eh_info = response.get_data()
         if eh_info:
@@ -275,7 +284,7 @@ class ClientBase(object):  # pylint:disable=too-many-instance-attributes
         """
         mgmt_msg = Message(application_properties={'name': self.eh_name,
                                                    'partition': partition})
-        response = self._management_request(mgmt_msg, op_type=b'com.microsoft:partition')
+        response = self._management_request(mgmt_msg, op_type=MGMT_PARTITION_OPERATION)
         partition_info = response.get_data()
         output = {}
         if partition_info:
@@ -292,3 +301,82 @@ class ClientBase(object):  # pylint:disable=too-many-instance-attributes
     def close(self):
         # type:() -> None
         self._conn_manager.close_connection()
+
+
+class ConsumerProducerMixin(object):
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.close()
+
+    def _check_closed(self):
+        if self._closed:
+            raise EventHubError("{} has been closed. Please create a new one to handle event data.".format(self._name))
+
+    def _open(self):
+        """Open the EventHubConsumer/EventHubProducer using the supplied connection.
+
+        """
+        # pylint: disable=protected-access
+        if not self._running:
+            if self._handler:
+                self._handler.close()
+            self._create_handler()
+            self._handler.open(connection=self._client._conn_manager.get_connection(  # pylint: disable=protected-access
+                self._client._address.hostname,
+                self._client._create_auth()
+            ))
+            while not self._handler.client_ready():
+                time.sleep(0.05)
+            self._max_message_size_on_link = self._handler.message_handler._link.peer_max_message_size \
+                                             or constants.MAX_MESSAGE_LENGTH_BYTES  # pylint: disable=protected-access
+            self._running = True
+
+    def _close_handler(self):
+        if self._handler:
+            self._handler.close()  # close the link (sharing connection) or connection (not sharing)
+        self._running = False
+
+    def _close_connection(self):
+        self._close_handler()
+        self._client._conn_manager.reset_connection_if_broken()  # pylint: disable=protected-access
+
+    def _handle_exception(self, exception):
+        if not self._running and isinstance(exception, compat.TimeoutException):
+            exception = errors.AuthenticationException("Authorization timeout.")
+        return _handle_exception(exception, self)
+
+    def _do_retryable_operation(self, operation, timeout=100000, **kwargs):
+        # pylint:disable=protected-access
+        # timeout equals to 0 means no timeout, set the value to be a large number.
+        timeout_time = time.time() + (timeout if timeout else 100000)
+        retried_times = 0
+        last_exception = kwargs.pop('last_exception', None)
+        operation_need_param = kwargs.pop('operation_need_param', True)
+
+        while retried_times <= self._client._config.max_retries:  # pylint: disable=protected-access
+            try:
+                if operation_need_param:
+                    return operation(timeout_time=timeout_time, last_exception=last_exception, **kwargs)
+                return operation()
+            except Exception as exception:  # pylint:disable=broad-except
+                last_exception = self._handle_exception(exception)
+                self._client._try_delay(retried_times=retried_times, last_exception=last_exception,
+                                        timeout_time=timeout_time, entity_name=self._name)
+                retried_times += 1
+
+        log.info("%r operation has exhausted retry. Last exception: %r.", self._name, last_exception)
+        raise last_exception
+
+    def close(self):
+        # type:() -> None
+        """
+        Close down the handler. If the handler has already closed,
+        this will be a no op.
+        """
+        self._running = False
+        if self._handler:
+            self._handler.close()  # this will close link if sharing connection. Otherwise close connection
+        self._closed = True
