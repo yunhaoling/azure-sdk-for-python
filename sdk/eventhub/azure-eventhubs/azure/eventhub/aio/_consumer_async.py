@@ -107,33 +107,6 @@ class EventHubConsumer(ConsumerProducerMixin):  # pylint:disable=too-many-instan
         self._event_queue = queue.Queue()
         self._last_received_event = None
 
-    async def __aiter__(self):
-        return self
-
-    async def __anext__(self):
-        retried_times = 0
-        last_exception = None
-        while retried_times < self._client._config.max_retries:  # pylint:disable=protected-access
-            try:
-                await self._open()
-                if not self._messages_iter:
-                    self._messages_iter = self._handler.receive_messages_iter_async()
-                message = await self._messages_iter.__anext__()
-                event_data = EventData._from_message(message)  # pylint:disable=protected-access
-                event_data._trace_link_message()  # pylint:disable=protected-access
-                self._offset = EventPosition(event_data.offset, inclusive=False)
-                retried_times = 0
-                if self._track_last_enqueued_event_properties:
-                    self._last_enqueued_event_properties = event_data._get_last_enqueued_event_properties()  # pylint:disable=protected-access
-                return event_data
-            except Exception as exception:  # pylint:disable=broad-except
-                last_exception = await self._handle_exception(exception)
-                await self._client._try_delay(retried_times=retried_times, last_exception=last_exception,  # pylint:disable=protected-access
-                                              entity_name=self._name)
-                retried_times += 1
-        log.info("%r operation has exhausted retry. Last exception: %r.", self._name, last_exception)
-        raise last_exception
-
     def _create_handler(self):
         source = Source(self._source)
         if self._offset is not None:
@@ -164,6 +137,9 @@ class EventHubConsumer(ConsumerProducerMixin):  # pylint:disable=too-many-instan
             **desired_capabilities,  # pylint:disable=protected-access
             loop=self._loop)
         self._messages_iter = None
+
+        self._handler._streaming_receive = True
+        self._handler._message_received_callback = self._message_received
 
     async def _open_with_retry(self):
         return await self._do_retryable_operation(self._open, operation_need_param=False)
@@ -216,29 +192,26 @@ class EventHubConsumer(ConsumerProducerMixin):  # pylint:disable=too-many-instan
         while retried_times < self._client._config.max_retries:  # pylint:disable=protected-access
             try:
                 await self._open()
-                self._handler._streaming_receive = True
-                self._handler._message_received_callback = self._message_received
-                while self._running:
-                    await self._handler.do_work_async()
-                    while self._event_queue.qsize():
-                        event_data = self._event_queue.get()
-                        await self._on_event_received(event_data)
-                        self._event_queue.task_done()
-                return
-            except Exception as exception:
-                if not self._running:
-                    return
-                else:
-                    if self._last_received_event:
-                        self._offset = EventPosition(self._last_received_event.offset)
-                    last_exception = await self._handle_exception(exception)
-                    await self._client._try_delay(retried_times=retried_times,
-                                                  last_exception=last_exception,
-                                                  entity_name=self._name)
-                    retried_times += 1
+                await self._handler.do_work_async()
 
-            log.info("%r operation has exhausted retry. Last exception: %r.", self._name, last_exception)
-            raise last_exception
+                while self._event_queue.qsize():
+                    event_data = self._event_queue.get()
+                    await self._on_event_received(event_data)
+                    self._event_queue.task_done()
+                return
+            except asyncio.CancelledError:
+                raise
+            except Exception as exception:
+                if self._last_received_event:
+                    self._offset = EventPosition(self._last_received_event.offset)
+                last_exception = await self._handle_exception(exception)
+                await self._client._try_delay(retried_times=retried_times,
+                                              last_exception=last_exception,
+                                              entity_name=self._name)
+                retried_times += 1
+
+        log.info("%r operation has exhausted retry. Last exception: %r.", self._name, last_exception)
+        raise last_exception
 
     @property
     def last_enqueued_event_properties(self):

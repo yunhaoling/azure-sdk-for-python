@@ -81,7 +81,7 @@ class EventHubProducerClient(ClientBase):
     def _start_producer(self, partition_id, send_timeout):
         with self._lock:
             self._get_partitions()
-            if partition_id not in self._partition_ids:
+            if partition_id not in self._partition_ids and partition_id != "-1":
                 raise ConnectError("Invalid partition {} for the event hub {}".format(partition_id, self.eh_name))
 
             if not self._producers[partition_id] or self._producers[partition_id].closed:
