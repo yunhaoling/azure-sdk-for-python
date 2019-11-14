@@ -13,24 +13,23 @@ import time
 import functools
 import threading
 from typing import Any, TYPE_CHECKING
+try:
+    from urlparse import urlparse  # type: ignore
+    from urllib import urlencode, quote_plus  # type: ignore
+except ImportError:
+    from urllib.parse import urlparse, urlencode, quote_plus
 
 import uamqp  # type: ignore
 from uamqp import Message  # type: ignore
 from uamqp import authentication  # type: ignore
 from uamqp import constants  # type: ignore
 
-from uamqp import types  # type: ignore
 from azure.eventhub import __version__
-from .configuration import Configuration
-from .common import EventHubSharedKeyCredential, EventHubSASTokenCredential, _Address, parse_sas_token
-from .error import _handle_exception
+from .exceptions import _handle_exception
+from ._configuration import Configuration
+from ._utils import parse_sas_token
+from ._common import EventHubSharedKeyCredential, EventHubSASTokenCredential
 from ._connection_manager import get_connection_manager
-
-try:
-    from urlparse import urlparse  # type: ignore
-    from urllib import urlencode, quote_plus  # type: ignore
-except ImportError:
-    from urllib.parse import urlparse, urlencode, quote_plus
 
 if TYPE_CHECKING:
     from azure.core.credentials import TokenCredential  # type: ignore
@@ -94,6 +93,12 @@ def _build_uri(address, entity):
     return address
 
 
+class _Address(object):
+    def __init__(self, hostname=None, path=None):
+        self.hostname = hostname
+        self.path = path
+
+
 class ClientBase(object):  # pylint:disable=too-many-instance-attributes
     def __init__(self, host, event_hub_path, credential, **kwargs):
         self.eh_name = event_hub_path
@@ -116,8 +121,20 @@ class ClientBase(object):  # pylint:disable=too-many-instance-attributes
     def __enter__(self):
         return self
 
-    def __exit__(self, exc_type, exc_val, exc_tb):
+    def __exit__(self, *args):
         self.close()
+
+    @classmethod
+    def from_connection_string(cls, conn_str, **kwargs):
+        event_hub_path = kwargs.pop("event_hub_path", None)
+        address, policy, key, entity = _parse_conn_str(conn_str)
+        entity = event_hub_path or entity
+        left_slash_pos = address.find("//")
+        if left_slash_pos != -1:
+            host = address[left_slash_pos + 2:]
+        else:
+            host = address
+        return cls(host, entity, EventHubSharedKeyCredential(policy, key), **kwargs)
 
     def _create_auth(self):
         """
@@ -158,36 +175,6 @@ class ClientBase(object):  # pylint:disable=too-many-instance-attributes
             return authentication.JWTTokenAuth(self._auth_uri, self._auth_uri,
                                                get_jwt_token, http_proxy=http_proxy,
                                                transport_type=transport_type)
-
-    @classmethod
-    def _create_properties(cls, user_agent=None):  # pylint: disable=no-self-use
-        """
-        Format the properties with which to instantiate the connection.
-        This acts like a user agent over HTTP.
-
-        :rtype: dict
-        """
-        properties = {}
-        product = "azsdk-python-eventhubs"
-        properties[types.AMQPSymbol("product")] = product
-        properties[types.AMQPSymbol("version")] = __version__
-        framework = "Python {}.{}.{}, {}".format(
-            sys.version_info[0], sys.version_info[1], sys.version_info[2], platform.python_implementation()
-        )
-        properties[types.AMQPSymbol("framework")] = framework
-        platform_str = platform.platform()
-        properties[types.AMQPSymbol("platform")] = platform_str
-
-        final_user_agent = '{}/{} ({}, {})'.format(product, __version__, framework, platform_str)
-        if user_agent:
-            final_user_agent = '{}, {}'.format(final_user_agent, user_agent)
-
-        if len(final_user_agent) > MAX_USER_AGENT_LENGTH:
-            raise ValueError("The user-agent string cannot be more than {} in length."
-                             "Current user_agent string is: {} with length: {}".format(
-                                MAX_USER_AGENT_LENGTH, final_user_agent, len(final_user_agent)))
-        properties[types.AMQPSymbol("user-agent")] = final_user_agent
-        return properties
 
     def _close_connection(self):
         self._conn_manager.reset_connection_if_broken()
@@ -233,18 +220,6 @@ class ClientBase(object):  # pylint:disable=too-many-instance-attributes
         span.add_attribute("component", "eventhubs")
         span.add_attribute("message_bus.destination", self._address.path)
         span.add_attribute("peer.address", self._address.hostname)
-
-    @classmethod
-    def from_connection_string(cls, conn_str, **kwargs):
-        event_hub_path = kwargs.pop("event_hub_path", None)
-        address, policy, key, entity = _parse_conn_str(conn_str)
-        entity = event_hub_path or entity
-        left_slash_pos = address.find("//")
-        if left_slash_pos != -1:
-            host = address[left_slash_pos + 2:]
-        else:
-            host = address
-        return cls(host, entity, EventHubSharedKeyCredential(policy, key), **kwargs)
 
     def get_properties(self):
         # type:() -> Dict[str, Any]

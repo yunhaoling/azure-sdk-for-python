@@ -15,8 +15,9 @@ from uamqp import ReceiveClientAsync, Source  # type: ignore
 from uamqp.compat import queue
 
 from ..common import EventData, EventPosition
-from ..error import _error_handler
+from ..exceptions import _error_handler
 from ._consumer_producer_mixin_async import ConsumerProducerMixin
+from .._utils import create_properties
 
 log = logging.getLogger(__name__)
 
@@ -158,7 +159,7 @@ class EventHubConsumer(ConsumerProducerMixin):  # pylint:disable=too-many-instan
             client_name=self._name,
             receive_settle_mode=uamqp.constants.ReceiverSettleMode.ReceiveAndDelete,
             auto_complete=False,
-            properties=self._client._create_properties(  # pylint:disable=protected-access
+            properties=create_properties(  # pylint:disable=protected-access
                 self._client._config.user_agent),  # pylint:disable=protected-access
             **desired_capabilities,  # pylint:disable=protected-access
             loop=self._loop)

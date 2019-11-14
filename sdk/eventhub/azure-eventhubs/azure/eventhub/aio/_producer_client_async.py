@@ -10,7 +10,7 @@ from uamqp import constants  # type: ignore
 from azure.eventhub import EventData, EventHubSharedKeyCredential, EventHubSASTokenCredential, EventDataBatch
 from ._client_base_async import ClientBaseAsync
 from ._producer_async import EventHubProducer
-from ..error import ConnectError
+from ..exceptions import ConnectError
 
 if TYPE_CHECKING:
     from azure.core.credentials import TokenCredential  # type: ignore

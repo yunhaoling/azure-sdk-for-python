@@ -16,8 +16,9 @@ from azure.core.tracing import SpanKind, AbstractSpan  # type: ignore
 from azure.core.settings import settings  # type: ignore
 
 from .common import EventData, EventDataBatch
-from .error import _error_handler, OperationTimeoutError, EventDataError
+from .exceptions import _error_handler, OperationTimeoutError, EventDataError
 from ._consumer_producer_mixin import ConsumerProducerMixin
+from ._utils import create_properties
 
 
 log = logging.getLogger(__name__)
@@ -111,7 +112,7 @@ class EventHubProducer(ConsumerProducerMixin):  # pylint:disable=too-many-instan
             keep_alive_interval=self._keep_alive,
             client_name=self._name,
             link_properties=self._link_properties,
-            properties=self._client._create_properties(self._client._config.user_agent))  # pylint: disable=protected-access
+            properties=create_properties(self._client._config.user_agent))  # pylint: disable=protected-access
 
     def _open_with_retry(self):
         return self._do_retryable_operation(self._open, operation_need_param=False)

@@ -15,8 +15,9 @@ from azure.core.tracing import SpanKind, AbstractSpan  # type: ignore
 from azure.core.settings import settings  # type: ignore
 
 from ..common import EventData, EventDataBatch
-from ..error import _error_handler, OperationTimeoutError, EventDataError
+from ..exceptions import _error_handler, OperationTimeoutError, EventDataError
 from .._producer import _error, _set_partition_key, _set_trace_message
+from .._utils import create_properties
 from ._consumer_producer_mixin_async import ConsumerProducerMixin
 
 log = logging.getLogger(__name__)
@@ -96,7 +97,7 @@ class EventHubProducer(ConsumerProducerMixin):  # pylint: disable=too-many-insta
             keep_alive_interval=self._keep_alive,
             client_name=self._name,
             link_properties=self._link_properties,
-            properties=self._client._create_properties(  # pylint: disable=protected-access
+            properties=create_properties(  # pylint: disable=protected-access
                 self._client._config.user_agent),  # pylint:disable=protected-access
             loop=self._loop)
 

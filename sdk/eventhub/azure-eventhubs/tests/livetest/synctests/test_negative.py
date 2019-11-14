@@ -16,6 +16,7 @@ from azure.eventhub import (
     EventDataSendError)
 
 from azure.eventhub.client import EventHubClient
+from azure.eventhub._utils import set_message_partition_key
 
 
 @pytest.mark.liveTest
@@ -86,7 +87,7 @@ def test_send_partition_key_with_partition_sync(connection_str):
     sender = client._create_producer(partition_id="1")
     try:
         data = EventData(b"Data")
-        data._set_partition_key(b"PKey")
+        set_message_partition_key(data.message, b'PKey')
         with pytest.raises(ValueError):
             sender.send(data)
     finally:

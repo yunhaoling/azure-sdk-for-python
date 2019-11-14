@@ -14,9 +14,10 @@ from typing import Any, TYPE_CHECKING
 from uamqp import authentication, constants  # type: ignore
 from uamqp import Message, AMQPClientAsync  # type: ignore
 
-from ..common import parse_sas_token, EventHubSharedKeyCredential, EventHubSASTokenCredential
+from ..common import EventHubSharedKeyCredential, EventHubSASTokenCredential
 from .error_async import _handle_exception
 from .._client_base import ClientBase
+from .._utils import parse_sas_token
 from ._connection_manager_async import get_connection_manager
 
 if TYPE_CHECKING:
