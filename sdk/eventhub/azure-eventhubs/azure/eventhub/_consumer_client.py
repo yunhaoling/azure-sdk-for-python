@@ -83,7 +83,6 @@ class EventHubConsumerClient(ClientBase):
             host=host, event_hub_path=event_hub_path, credential=credential,
             network_tracing=kwargs.get("logging_enable"), **kwargs)
         self._event_processors = dict()  # type: Dict[Tuple[str, str], EventProcessor]
-        self._closed = False
 
     def _create_consumer(self, consumer_group, partition_id, event_position, **kwargs):
         owner_level = kwargs.get("owner_level")

@@ -125,7 +125,6 @@ class ClientBase(object):  # pylint:disable=too-many-instance-attributes
         self._config = Configuration(**kwargs)
         self._debug = self._config.network_tracing
         self._conn_manager = get_connection_manager(**kwargs)
-        self._lock = threading.RLock()
         log.info("%r: Created the Event Hub client", self._container_id)
 
     def __enter__(self):
@@ -312,7 +311,7 @@ class ConsumerProducerMixin(object):
         self.close()
 
     def _check_closed(self):
-        if self._closed:
+        if self.closed:
             raise EventHubError("{} has been closed. Please create a new one to handle event data.".format(self._name))
 
     def _open(self):
@@ -320,7 +319,7 @@ class ConsumerProducerMixin(object):
 
         """
         # pylint: disable=protected-access
-        if not self._running:
+        if not self.running:
             if self._handler:
                 self._handler.close()
             self._create_handler()
@@ -332,19 +331,19 @@ class ConsumerProducerMixin(object):
                 time.sleep(0.05)
             self._max_message_size_on_link = self._handler.message_handler._link.peer_max_message_size \
                                              or constants.MAX_MESSAGE_LENGTH_BYTES  # pylint: disable=protected-access
-            self._running = True
+            self.running = True
 
     def _close_handler(self):
         if self._handler:
             self._handler.close()  # close the link (sharing connection) or connection (not sharing)
-        self._running = False
+        self.running = False
 
     def _close_connection(self):
         self._close_handler()
         self._client._conn_manager.reset_connection_if_broken()  # pylint: disable=protected-access
 
     def _handle_exception(self, exception):
-        if not self._running and isinstance(exception, compat.TimeoutException):
+        if not self.running and isinstance(exception, compat.TimeoutException):
             exception = errors.AuthenticationException("Authorization timeout.")
         return _handle_exception(exception, self)
 
@@ -376,7 +375,7 @@ class ConsumerProducerMixin(object):
         Close down the handler. If the handler has already closed,
         this will be a no op.
         """
-        self._running = False
+        self.running = False
         if self._handler:
             self._handler.close()  # this will close link if sharing connection. Otherwise close connection
-        self._closed = True
+        self.closed = True

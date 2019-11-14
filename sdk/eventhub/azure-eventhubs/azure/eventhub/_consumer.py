@@ -78,9 +78,11 @@ class EventHubConsumer(ConsumerProducerMixin):  # pylint:disable=too-many-instan
         auto_reconnect = kwargs.get("auto_reconnect", True)
         track_last_enqueued_event_properties = kwargs.get("track_last_enqueued_event_properties", False)
 
+        self.running = False
+        self.closed = False
+        self.stop = False  # used by event processor
+
         self._on_event_received = kwargs.get("on_event_received")
-        self._running = False
-        self._closed = False
         self._client = client
         self._source = source
         self._offset = event_position
@@ -103,8 +105,6 @@ class EventHubConsumer(ConsumerProducerMixin):  # pylint:disable=too-many-instan
         self._track_last_enqueued_event_properties = track_last_enqueued_event_properties
         self._last_enqueued_event_properties = {}
         self._last_received_event = None
-
-        self.stop = False  # used by event processor
 
     def _create_handler(self):
         source = Source(self._source)
@@ -156,7 +156,7 @@ class EventHubConsumer(ConsumerProducerMixin):  # pylint:disable=too-many-instan
                 self._handler.do_work()
                 return
             except Exception as exception:
-                if not self._running:  # exit by close
+                if not self.running:  # exit by close
                     return
                 else:
                     if self._last_received_event:
@@ -166,19 +166,3 @@ class EventHubConsumer(ConsumerProducerMixin):  # pylint:disable=too-many-instan
 
         log.info("%r operation has exhausted retry. Last exception: %r.", self._name, last_exception)
         raise last_exception
-
-    @property
-    def last_enqueued_event_properties(self):
-        """
-        The latest enqueued event information. This property will be updated each time an event is received when
-        the receiver is created with `track_last_enqueued_event_properties` being `True`.
-        The dict includes following information of the partition:
-
-            - `sequence_number`
-            - `offset`
-            - `enqueued_time`
-            - `retrieval_time`
-
-        :rtype: dict or None
-        """
-        return self._last_enqueued_event_properties if self._track_last_enqueued_event_properties else None
