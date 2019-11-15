@@ -169,6 +169,8 @@ class EventHubConsumer(ConsumerProducerMixin):  # pylint:disable=too-many-instan
                 if ld_error.condition == uamqp.constants.ErrorCodes.LinkStolen:
                     raise await self._handle_exception(ld_error)
             except Exception as exception:  # pylint: disable=broad-except
+                if not self.running:  # exit by close
+                    return
                 if self._last_received_event:
                     self._offset = EventPosition(self._last_received_event.offset)
                 last_exception = await self._handle_exception(exception)
