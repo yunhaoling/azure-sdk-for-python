@@ -155,27 +155,28 @@ class EventHubConsumerClient(ClientBase):
                 :caption: Receive events from the EventHub.
         """
         partition_id = kwargs.get("partition_id")
-        error = None
-        if (consumer_group, '-1') in self._event_processors:
-            error = "This consumer client is already receiving events "
-                    "from all partitions for consumer group {}.".format(consumer_group)
-        elif partition_id is None and any(x[0] == consumer_group for x in self._event_processors):
-            error = "This consumer client is already receiving events "
-                    "for consumer group {}.".format(consumer_group)
-        elif (consumer_group, partition_id) in self._event_processors:
-            error = "This consumer client is already receiving events "
-                    "from partition {} for consumer group {}. ".format(partition_id, consumer_group))
-        if error:
-            log.warning(error)
-            raise ValueError(error)
+        with self._lock:
+            error = None
+            if (consumer_group, '-1') in self._event_processors:
+                error = "This consumer client is already receiving events "
+                        "from all partitions for consumer group {}.".format(consumer_group)
+            elif partition_id is None and any(x[0] == consumer_group for x in self._event_processors):
+                error = "This consumer client is already receiving events "
+                        "for consumer group {}.".format(consumer_group)
+            elif (consumer_group, partition_id) in self._event_processors:
+                error = "This consumer client is already receiving events "
+                        "from partition {} for consumer group {}. ".format(partition_id, consumer_group)
+            if error:
+                log.warning(error)
+                raise ValueError(error)
 
-        event_processor = EventProcessor(
-            self, consumer_group, on_event,
-            partition_manager=self._partition_manager,
-            polling_interval=self._load_balancing_interval,
-            **kwargs
-        )
-        self._event_processors[(consumer_group, partition_id or "-1")] = event_processor
+            event_processor = EventProcessor(
+                self, consumer_group, on_event,
+                partition_manager=self._partition_manager,
+                polling_interval=self._load_balancing_interval,
+                **kwargs
+            )
+            self._event_processors[(consumer_group, partition_id or "-1")] = event_processor
         try:
             event_processor.start()
         finally:
