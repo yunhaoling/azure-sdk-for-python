@@ -197,19 +197,16 @@ class EventHubConsumerClient(ClientBaseAsync):
                 prefetch=prefetch,
                 track_last_enqueued_event_properties=track_last_enqueued_event_properties,
             )
-            if partition_id:
-                self._event_processors[(consumer_group, partition_id)] = event_processor
-            else:
-                self._event_processors[(consumer_group, "-1")] = event_processor
+            self._event_processors[(consumer_group, partition_id or "-1")] = event_processor
         try:
             await event_processor.start()
         finally:
             await event_processor.stop()
             async with self._lock:
-                if partition_id and (consumer_group, partition_id) in self._event_processors:
-                    del self._event_processors[(consumer_group, partition_id)]
-                elif partition_id is None and (consumer_group, '-1') in self._event_processors:
-                    del self._event_processors[(consumer_group, "-1")]
+                try:
+                    del self._event_processors[(consumer_group, partition_id or "1")]
+                except KeyError:
+                    pass
 
     async def close(self):
         # type: () -> None

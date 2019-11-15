@@ -3,6 +3,7 @@
 # Licensed under the MIT License. See License.txt in the project root for license information.
 # --------------------------------------------------------------------------------------------
 import logging
+import threading
 from typing import Any, Union, Dict, Tuple, TYPE_CHECKING, Callable, List
 
 from ._common import EventHubSharedKeyCredential, EventHubSASTokenCredential, EventData
@@ -77,6 +78,7 @@ class EventHubConsumerClient(ClientBase):
         super(EventHubConsumerClient, self).__init__(
             host=host, event_hub_path=event_hub_path, credential=credential,
             network_tracing=network_tracing, **kwargs)
+        self._lock = threading.Lock()
         self._event_processors = dict()  # type: Dict[Tuple[str, str], EventProcessor]
 
     def _create_consumer(self, consumer_group, partition_id, event_position, **kwargs):
@@ -174,7 +176,15 @@ class EventHubConsumerClient(ClientBase):
             **kwargs
         )
         self._event_processors[(consumer_group, partition_id or "-1")] = event_processor
-        event_processor.start()
+        try:
+            event_processor.start()
+        finally:
+            event_processor.stop()
+            with self._lock:
+                try:
+                    del self._event_processors[(consumer_group, partition_id or "-1")]
+                except KeyError:
+                    pass
 
     def close(self):
         # type: () -> None
@@ -192,7 +202,8 @@ class EventHubConsumerClient(ClientBase):
                 :caption: Close down the client.
 
         """
-        for processor in self._event_processors.values():
-            processor.stop()
-        self._event_processors = {}
+        with self._lock:
+            for processor in self._event_processors.values():
+                processor.stop()
+            self._event_processors = {}
         super(EventHubConsumerClient, self).close()
