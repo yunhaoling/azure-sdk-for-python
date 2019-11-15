@@ -9,6 +9,7 @@ from typing import Any, Union, Dict, Tuple, TYPE_CHECKING, Callable, List
 from ._common import EventHubSharedKeyCredential, EventHubSASTokenCredential, EventData
 from ._client_base import ClientBase
 from ._consumer import EventHubConsumer
+from ._constants import ALL_PARTITIONS
 from ._eventprocessor.event_processor import EventProcessor
 from ._eventprocessor.partition_context import PartitionContext
 
@@ -157,7 +158,7 @@ class EventHubConsumerClient(ClientBase):
         partition_id = kwargs.get("partition_id")
         with self._lock:
             error = None
-            if (consumer_group, '-1') in self._event_processors:
+            if (consumer_group, ALL_PARTITIONS) in self._event_processors:
                 error = "This consumer client is already receiving events "
                         "from all partitions for consumer group {}.".format(consumer_group)
             elif partition_id is None and any(x[0] == consumer_group for x in self._event_processors):
@@ -176,14 +177,14 @@ class EventHubConsumerClient(ClientBase):
                 polling_interval=self._load_balancing_interval,
                 **kwargs
             )
-            self._event_processors[(consumer_group, partition_id or "-1")] = event_processor
+            self._event_processors[(consumer_group, partition_id or ALL_PARTITIONS)] = event_processor
         try:
             event_processor.start()
         finally:
             event_processor.stop()
             with self._lock:
                 try:
-                    del self._event_processors[(consumer_group, partition_id or "-1")]
+                    del self._event_processors[(consumer_group, partition_id or ALL_PARTITIONS)]
                 except KeyError:
                     pass
 

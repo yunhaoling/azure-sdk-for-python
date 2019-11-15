@@ -11,6 +11,7 @@ from azure.eventhub import EventPosition, EventHubSharedKeyCredential, EventHubS
 from ._eventprocessor.event_processor import EventProcessor
 from ._consumer_async import EventHubConsumer
 from ._client_base_async import ClientBaseAsync
+from .._constants import ALL_PARTITIONS
 
 if TYPE_CHECKING:
     from azure.core.credentials import TokenCredential  # type: ignore
@@ -234,7 +235,7 @@ class EventHubConsumerClient(ClientBaseAsync):
         """
         async with self._lock:
             error = None
-            if (consumer_group, '-1') in self._event_processors:
+            if (consumer_group, ALL_PARTITIONS) in self._event_processors:
                 error = "This consumer client is already receiving events "
                         "from all partitions for consumer group {}. ".format(consumer_group))
             elif partition_id is None and any(x[0] == consumer_group for x in self._event_processors):
@@ -260,14 +261,14 @@ class EventHubConsumerClient(ClientBaseAsync):
                 prefetch=prefetch,
                 track_last_enqueued_event_properties=track_last_enqueued_event_properties,
             )
-            self._event_processors[(consumer_group, partition_id or "-1")] = event_processor
+            self._event_processors[(consumer_group, partition_id or ALL_PARTITIONS)] = event_processor
         try:
             await event_processor.start()
         finally:
             await event_processor.stop()
             async with self._lock:
                 try:
-                    del self._event_processors[(consumer_group, partition_id or "1")]
+                    del self._event_processors[(consumer_group, partition_id or ALL_PARTITIONS)]
                 except KeyError:
                     pass
 

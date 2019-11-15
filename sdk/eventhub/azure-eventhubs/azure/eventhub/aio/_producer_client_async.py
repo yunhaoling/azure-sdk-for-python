@@ -11,6 +11,7 @@ from uamqp import constants  # type: ignore
 from ..exceptions import ConnectError, EventHubError
 from ._client_base_async import ClientBaseAsync
 from ._producer_async import EventHubProducer
+from .._constants import ALL_PARTITIONS
 from .._common import (
     EventData,
     EventHubSharedKeyCredential,
@@ -64,7 +65,7 @@ class EventHubProducerClient(ClientBaseAsync):
         super(EventHubProducerClient, self).__init__(
             host=host, event_hub_path=event_hub_path, credential=credential,
             network_tracing=kwargs.pop("logging_enable", False), **kwargs)
-        self._producers = {"-1": self._create_producer()}  # type: Dict[str, EventHubProducer]
+        self._producers = {ALL_PARTITIONS: self._create_producer()}  # type: Dict[str, EventHubProducer]
         self._lock = asyncio.Lock()  # sync the creation of self._producers
         self._max_message_size_on_link = 0
         self._partition_ids = None
@@ -78,15 +79,15 @@ class EventHubProducerClient(ClientBaseAsync):
     async def _get_max_mesage_size(self):
         async with self._lock:
             if not self._max_message_size_on_link:
-                await self._producers["-1"]._open_with_retry()
+                await self._producers[ALL_PARTITIONS]._open_with_retry()
                 self._max_message_size_on_link = \
-                    self._producers[-1]._handler.message_handler._link.peer_max_message_size \
+                    self._producers[ALL_PARTITIONS]._handler.message_handler._link.peer_max_message_size \
                     or constants.MAX_MESSAGE_LENGTH_BYTES
 
     async def _start_producer(self, partition_id, send_timeout):
         async with self._lock:
             await self._get_partitions()
-            if partition_id not in self._partition_ids and partition_id != "-1":
+            if partition_id not in self._partition_ids and partition_id != ALL_PARTITIONS:
                 raise ConnectError("Invalid partition {} for the event hub {}".format(partition_id, self.eh_name))
 
             if not self._producers[partition_id] or self._producers[partition_id].closed:
@@ -192,7 +193,7 @@ class EventHubProducerClient(ClientBaseAsync):
                 :caption: Asynchronously sends event data
 
         """
-        partition_id = kwargs.pop("partition_id", "-1")
+        partition_id = partition_id or ALL_PARTITIONS
         send_timeout = kwargs.pop("timeout", None)
         try:
             await self._producers[partition_id].send(event_data, **kwargs)

@@ -6,7 +6,6 @@ import asyncio
 import uuid
 import logging
 import time
-from distutils.version import StrictVersion
 
 import uamqp  # type: ignore
 from uamqp import errors, types, utils  # type: ignore
@@ -111,10 +110,7 @@ class EventHubConsumer(ConsumerProducerMixin):  # pylint:disable=too-many-instan
         source = Source(self._source)
         if self._offset is not None:
             source.set_filter(self._offset._selector())  # pylint:disable=protected-access
-
-        if StrictVersion(uamqp.__version__) < StrictVersion("1.2.3"):  # backward compatible until uamqp 1.2.3 released
-            desired_capabilities = {}
-        elif self._track_last_enqueued_event_properties:
+        if self._track_last_enqueued_event_properties:
             symbol_array = [types.AMQPSymbol(RECEIVER_RUNTIME_METRIC_SYMBOL)]
             desired_capabilities = {"desired_capabilities": utils.data_factory(types.AMQPArray(symbol_array))}
         else:
@@ -133,8 +129,8 @@ class EventHubConsumer(ConsumerProducerMixin):  # pylint:disable=too-many-instan
             receive_settle_mode=uamqp.constants.ReceiverSettleMode.ReceiveAndDelete,
             auto_complete=False,
             properties=properties,
-            loop=self._loop,
-            **desired_capabilities)
+            desired_capabilities=desired_capabilities,
+            loop=self._loop)
 
         self._handler._streaming_receive = True  # pylint:disable=protected-access
         self._handler._message_received_callback = self._message_received  # pylint:disable=protected-access
