@@ -6,14 +6,11 @@ from __future__ import unicode_literals
 
 import uuid
 import logging
-import time
-from typing import List
 from distutils.version import StrictVersion
 
 import uamqp  # type: ignore
 from uamqp import types, errors, utils  # type: ignore
 from uamqp import ReceiveClient, Source  # type: ignore
-from uamqp.compat import queue
 
 from .exceptions import _error_handler
 from ._common import EventData, EventPosition
@@ -133,13 +130,14 @@ class EventHubConsumer(ConsumerProducerMixin):  # pylint:disable=too-many-instan
             properties=properties,
             **desired_capabilities)
 
-        self._handler._streaming_receive = True
-        self._handler._message_received_callback = self._message_received
+        self._handler._streaming_receive = True  # pylint:disable=protected-access
+        self._handler._message_received_callback = self._message_received  # pylint:disable=protected-access
 
     def _open_with_retry(self):
         return self._do_retryable_operation(self._open, operation_need_param=False)
 
     def _message_received(self, message):
+        # pylint:disable=protected-access
         event_data = EventData._from_message(message)
         trace_link_message(event_data)
         self._last_received_event = event_data
@@ -154,14 +152,16 @@ class EventHubConsumer(ConsumerProducerMixin):  # pylint:disable=too-many-instan
                 self._open()
                 self._handler.do_work()
                 return
-            except Exception as exception:
+            except uamqp.errors.LinkDetach as ld_error:
+                if ld_error.condition == uamqp.constants.ErrorCodes.LinkStolen:
+                    raise self._handle_exception(ld_error)
+            except Exception as exception:  # pylint: disable=broad-except
                 if not self.running:  # exit by close
                     return
-                else:
-                    if self._last_received_event:
-                        self._offset = EventPosition(self._last_received_event.offset)
-                    last_exception = self._handle_exception(exception)
-                    retried_times += 1
+                if self._last_received_event:
+                    self._offset = EventPosition(self._last_received_event.offset)
+                last_exception = self._handle_exception(exception)
+                retried_times += 1
 
         log.info("%r operation has exhausted retry. Last exception: %r.", self._name, last_exception)
         raise last_exception

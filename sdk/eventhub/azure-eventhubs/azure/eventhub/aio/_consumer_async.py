@@ -5,7 +5,6 @@
 import asyncio
 import uuid
 import logging
-from typing import List, Any
 import time
 from distutils.version import StrictVersion
 
@@ -137,8 +136,8 @@ class EventHubConsumer(ConsumerProducerMixin):  # pylint:disable=too-many-instan
             loop=self._loop,
             **desired_capabilities)
 
-        self._handler._streaming_receive = True
-        self._handler._message_received_callback = self._message_received
+        self._handler._streaming_receive = True  # pylint:disable=protected-access
+        self._handler._message_received_callback = self._message_received  # pylint:disable=protected-access
 
     async def _open_with_retry(self):
         return await self._do_retryable_operation(self._open, operation_need_param=False)
@@ -164,15 +163,15 @@ class EventHubConsumer(ConsumerProducerMixin):  # pylint:disable=too-many-instan
                     await self._on_event_received(event_data)
                     self._event_queue.task_done()
                 return
-            except asyncio.CancelledError:
+            except asyncio.CancelledError:  # pylint: disable=try-except-raise
                 raise
-            except Exception as exception:
+            except uamqp.errors.LinkDetach as ld_error:
+                if ld_error.condition == uamqp.constants.ErrorCodes.LinkStolen:
+                    raise await self._handle_exception(ld_error)
+            except Exception as exception:  # pylint: disable=broad-except
                 if self._last_received_event:
                     self._offset = EventPosition(self._last_received_event.offset)
                 last_exception = await self._handle_exception(exception)
-                await self._client._try_delay(retried_times=retried_times,
-                                              last_exception=last_exception,
-                                              entity_name=self._name)
                 retried_times += 1
 
         log.info("%r operation has exhausted retry. Last exception: %r.", self._name, last_exception)
