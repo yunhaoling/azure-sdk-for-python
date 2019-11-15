@@ -70,7 +70,6 @@ class EventHubConsumer(ConsumerProducerMixin):  # pylint:disable=too-many-instan
          It is set to `False` by default.
         :type track_last_enqueued_event_properties: bool
         """
-
         event_position = kwargs.get("event_position", None)
         prefetch = kwargs.get("prefetch", 300)
         owner_level = kwargs.get("owner_level", None)

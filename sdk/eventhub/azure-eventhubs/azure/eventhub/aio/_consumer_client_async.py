@@ -2,12 +2,16 @@
 # Copyright (c) Microsoft Corporation. All rights reserved.
 # Licensed under the MIT License. See License.txt in the project root for license information.
 # --------------------------------------------------------------------------------------------
+
+import asyncio
 import logging
 from typing import Any, Union, TYPE_CHECKING, Dict, Tuple
+
 from azure.eventhub import EventPosition, EventHubSharedKeyCredential, EventHubSASTokenCredential
 from ._eventprocessor.event_processor import EventProcessor
 from ._consumer_async import EventHubConsumer
 from ._client_base_async import ClientBaseAsync
+
 if TYPE_CHECKING:
     from azure.core.credentials import TokenCredential  # type: ignore
 
@@ -68,15 +72,14 @@ class EventHubConsumerClient(ClientBaseAsync):
 
     def __init__(self, host, event_hub_path, credential, **kwargs) -> None:
         # type:(str, str, Union[EventHubSharedKeyCredential, EventHubSASTokenCredential, TokenCredential], Any) -> None
-        """"""
         self._partition_manager = kwargs.pop("partition_manager", None)
         self._load_balancing_interval = kwargs.pop("load_balancing_interval", 10)
         network_tracing = kwargs.pop("logging_enable", False)
         super(EventHubConsumerClient, self).__init__(
             host=host, event_hub_path=event_hub_path, credential=credential,
             network_tracing=network_tracing, **kwargs)
+        self._lock = asyncio.Lock()
         self._event_processors = dict()  # type: Dict[Tuple[str, str], EventProcessor]
-        self._closed = False
 
     def _create_consumer(
             self,
@@ -100,69 +103,6 @@ class EventHubConsumerClient(ClientBaseAsync):
             prefetch=prefetch,
             track_last_enqueued_event_properties=track_last_enqueued_event_properties, loop=loop)
         return handler
-
-    @classmethod
-    def from_connection_string(cls, conn_str: str,
-                               *,
-                               event_hub_path: str = None,
-                               logging_enable: bool = False,
-                               http_proxy: dict = None,
-                               auth_timeout: float = 60,
-                               user_agent: str = None,
-                               retry_total: int = 3,
-                               transport_type=None,
-                               partition_manager=None,
-                               load_balancing_interval: float = 10
-                               ) -> 'EventHubConsumerClient':
-        # pylint: disable=arguments-differ
-        """
-        Create an EventHubConsumerClient from a connection string.
-
-        :param str conn_str: The connection string of an eventhub.
-        :keyword str event_hub_path: The path of the specific Event Hub to connect the client to.
-        :keyword bool logging_enable: Whether to output network trace logs to the logger. Default is `False`.
-        :keyword dict[str,Any] http_proxy: HTTP proxy settings. This must be a dictionary with the following
-         keys - 'proxy_hostname' (str value) and 'proxy_port' (int value).
-         Additionally the following keys may also be present - 'username', 'password'.
-        :keyword float auth_timeout: The time in seconds to wait for a token to be authorized by the service.
-         The default value is 60 seconds. If set to 0, no timeout will be enforced from the client.
-        :keyword str user_agent: The user agent that needs to be appended to the built in user agent string.
-        :keyword int retry_total: The total number of attempts to redo the failed operation when an error happened.
-         Default value is 3.
-        :keyword transport_type: The type of transport protocol that will be used for communicating with
-         the Event Hubs service. Default is `TransportType.Amqp`.
-        :paramtype transport_type: ~azure.eventhub.TransportType
-        :keyword partition_manager:
-         stores the load balancing data and checkpoint data when receiving events
-         if partition_manager is specified. If it's None, this EventHubConsumerClient instance will receive
-         events without load balancing and checkpoint.
-        :paramtype partition_manager: ~azure.eventhub.aio.PartitionManager
-        :keyword float load_balancing_interval:
-         When load balancing kicks in, this is the interval in seconds between two load balancing. Default is 10.
-        :rtype: ~azure.eventhub.aio.EventHubConsumerClient
-
-        .. admonition:: Example:
-
-            .. literalinclude:: ../samples/async_samples/sample_code_eventhub_async.py
-                :start-after: [START create_eventhub_consumer_client_from_conn_str_async]
-                :end-before: [END create_eventhub_consumer_client_from_conn_str_async]
-                :language: python
-                :dedent: 4
-                :caption: Create a new instance of the EventHubConsumerClient from connection string.
-
-        """
-        return super(EventHubConsumerClient, cls).from_connection_string(
-            conn_str,
-            event_hub_path=event_hub_path,
-            logging_enable=logging_enable,
-            http_proxy=http_proxy,
-            auth_timeout=auth_timeout,
-            user_agent=user_agent,
-            retry_total=retry_total,
-            transport_type=transport_type,
-            partition_manager=partition_manager,
-            load_balancing_interval=load_balancing_interval
-        )
 
     async def receive(
             self, on_event, consumer_group: str,
@@ -232,17 +172,17 @@ class EventHubConsumerClient(ClientBaseAsync):
         async with self._lock:
             error = None
             if (consumer_group, '-1') in self._event_processors:
-                error = ValueError("This consumer client is already receiving events from all partitions for"
-                                   " consumer group {}. ".format(consumer_group))
+                error = "This consumer client is already receiving events "
+                        "from all partitions for consumer group {}. ".format(consumer_group))
             elif partition_id is None and any(x[0] == consumer_group for x in self._event_processors):
-                error = ValueError("This consumer client is already receiving events for consumer group {}. "
-                                   .format(consumer_group))
+                error = "This consumer client is already receiving events "
+                        "for consumer group {}. ".format(consumer_group))
             elif (consumer_group, partition_id) in self._event_processors:
-                error = ValueError("This consumer is already receiving events from partition {} for consumer group {}. "
-                                   .format(partition_id, consumer_group))
+                error = "This consumer client is already receiving events "
+                        "from partition {} for consumer group {}. ".format(partition_id, consumer_group))
             if error:
                 log.warning(error)
-                raise error
+                raise ValueError(error)
 
             event_processor = EventProcessor(
                 self, consumer_group, on_event,
@@ -288,7 +228,7 @@ class EventHubConsumerClient(ClientBaseAsync):
 
         """
         async with self._lock:
-            for _ in range(len(self._event_processors)):
-                _, ep = self._event_processors.popitem()
-                await ep.stop()
+            for processor in self._event_processors.values():
+                await processor.stop()
+            self._event_processors = {}
             await super().close()

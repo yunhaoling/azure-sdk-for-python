@@ -71,17 +71,12 @@ class EventHubConsumerClient(ClientBase):
 
     def __init__(self, host, event_hub_path, credential, **kwargs):
         # type:(str, str, Union[EventHubSharedKeyCredential, EventHubSASTokenCredential, TokenCredential], Any) -> None
-        """"""
-        receive_timeout = kwargs.get("receive_timeout", 3)
-        if receive_timeout <= 0:
-            raise ValueError("receive_timeout must be greater than 0.")
-
-        kwargs['receive_timeout'] = receive_timeout
         self._partition_manager = kwargs.pop("partition_manager", None)
         self._load_balancing_interval = kwargs.pop("load_balancing_interval", 10)
+        network_tracing = kwargs.pop("logging_enable", False)
         super(EventHubConsumerClient, self).__init__(
             host=host, event_hub_path=event_hub_path, credential=credential,
-            network_tracing=kwargs.get("logging_enable"), **kwargs)
+            network_tracing=network_tracing, **kwargs)
         self._event_processors = dict()  # type: Dict[Tuple[str, str], EventProcessor]
 
     def _create_consumer(self, consumer_group, partition_id, event_position, **kwargs):
