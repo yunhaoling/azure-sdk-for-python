@@ -37,9 +37,9 @@ def on_events(partition_context, events):
 
 
 consumer_client = EventHubConsumerClient.from_connection_string(
-    conn_str=CONNECTION_STR, event_hub_path=EVENT_HUB, http_proxy=HTTP_PROXY)
+    conn_str=CONNECTION_STR, eventhub_name=EVENT_HUB, http_proxy=HTTP_PROXY)
 producer_client = EventHubProducerClient.from_connection_string(
-    conn_str=CONNECTION_STR, event_hub_path=EVENT_HUB, http_proxy=HTTP_PROXY)
+    conn_str=CONNECTION_STR, eventhub_name=EVENT_HUB, http_proxy=HTTP_PROXY)
 
 with producer_client:
     event_data_batch = producer_client.create_batch(max_size=10000)

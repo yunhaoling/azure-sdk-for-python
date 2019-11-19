@@ -43,7 +43,7 @@ def on_events(partition_context, events):
 if __name__ == '__main__':
     consumer_client = EventHubConsumerClient.from_connection_string(
         conn_str=CONNECTION_STR,
-        event_hub_path=EVENT_HUB,
+        eventhub_name=EVENT_HUB,
     )
 
     try:
