@@ -130,8 +130,14 @@ class BlobCheckpointStore(CheckpointStore):
                 pass
         return gathered_results
 
-    def update_checkpoint(self, fully_qualified_namespace, eventhub_name, consumer_group, partition_id,
-                                offset, sequence_number):
+    def update_checkpoint(self, checkpoint):
+        fully_qualified_namespace = checkpoint.get("fully_qualified_namespace")
+        eventhub_name = checkpoint.get("eventhub_name")
+        consumer_group = checkpoint.get("consumer_group")
+        partition_id = checkpoint.get("partition_id")
+        offset = checkpoint.get("offset")
+        sequence_number = checkpoint.get("sequence_number")
+
         metadata = {
             "Offset": offset,
             "SequenceNumber": str(sequence_number),
