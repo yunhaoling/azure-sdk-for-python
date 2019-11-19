@@ -78,7 +78,7 @@ def example_eventhub_sync_send_and_receive():
         event_data_batch = producer.create_batch(max_size=10000)
         while True:
             try:
-                event_data_batch.try_add(EventData('Message inside EventBatchData'))
+                event_data_batch.add(EventData('Message inside EventBatchData'))
             except ValueError:
                 # The EventDataBatch object reaches its max_size.
                 # You can send the full EventDataBatch object and create a new one here.
@@ -87,8 +87,17 @@ def example_eventhub_sync_send_and_receive():
 
         # [START eventhub_producer_client_send_sync]
         with producer:
-            event_data = EventData(b"A single event")
-            producer.send(event_data)
+            event_data_batch = producer.create_batch(max_size=10000)
+
+            while True:
+                try:
+                    event_data_batch.add(EventData('Message inside EventBatchData'))
+                except ValueError:
+                    # EventDataBatch object reaches max_size.
+                    # New EventDataBatch object can be created here to send more data
+                    break
+
+            producer.send_batch(event_data_batch)
         # [END eventhub_producer_client_send_sync]
         time.sleep(1)
 
@@ -118,7 +127,17 @@ def example_eventhub_producer_ops():
     producer = EventHubProducerClient.from_connection_string(conn_str=event_hub_connection_str,
                                                              event_hub_path=event_hub)
     try:
-        producer.send(EventData(b"A single event"))
+        event_data_batch = producer.create_batch(max_size=10000)
+
+        while True:
+            try:
+                event_data_batch.add(EventData('Message inside EventBatchData'))
+            except ValueError:
+                # EventDataBatch object reaches max_size.
+                # New EventDataBatch object can be created here to send more data
+                break
+
+        producer.send_batch(event_data_batch)
     finally:
         # Close down the producer handler.
         producer.close()
