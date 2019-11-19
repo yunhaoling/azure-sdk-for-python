@@ -41,6 +41,5 @@ __all__ = [
     "EventHubSASTokenCredential",
     "CheckpointStore",
     "CloseReason",
-    "OwnershipLostError",
     "PartitionContext",
 ]
