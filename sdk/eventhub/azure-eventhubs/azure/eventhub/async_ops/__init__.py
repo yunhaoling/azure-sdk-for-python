@@ -204,7 +204,7 @@ class EventHubClientAsync(EventHubClient):
 
     def add_async_receiver(
             self, consumer_group, partition, offset=None, prefetch=300,
-            operation=None, keep_alive=30, auto_reconnect=True, loop=None,
+            operation=None, keep_alive=None, auto_reconnect=True, loop=None,
             idle_timeout=None):
         """
         Add an async receiver to the client for a particular consumer group and partition.
@@ -246,7 +246,7 @@ class EventHubClientAsync(EventHubClient):
 
     def add_async_epoch_receiver(
             self, consumer_group, partition, epoch, prefetch=300,
-            operation=None, keep_alive=30, auto_reconnect=True, loop=None,
+            operation=None, keep_alive=None, auto_reconnect=True, loop=None,
             idle_timeout=None):
         """
         Add an async receiver to the client with an epoch value. Only a single epoch receiver
@@ -288,7 +288,7 @@ class EventHubClientAsync(EventHubClient):
 
     def add_async_sender(
             self, partition=None, operation=None, send_timeout=60,
-            keep_alive=30, auto_reconnect=True, loop=None):
+            keep_alive=None, auto_reconnect=True, loop=None):
         """
         Add an async sender to the client to send ~azure.eventhub.common.EventData object
         to an EventHub.

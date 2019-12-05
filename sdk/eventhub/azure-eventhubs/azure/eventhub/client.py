@@ -435,7 +435,7 @@ class EventHubClient(object):
 
     def add_receiver(
             self, consumer_group, partition, offset=None, prefetch=300,
-            operation=None, keep_alive=30, auto_reconnect=True, idle_timeout=None):
+            operation=None, keep_alive=None, auto_reconnect=True, idle_timeout=None):
         """
         Add a receiver to the client for a particular consumer group and partition.
 
@@ -476,7 +476,7 @@ class EventHubClient(object):
 
     def add_epoch_receiver(
             self, consumer_group, partition, epoch, prefetch=300,
-            operation=None, keep_alive=30, auto_reconnect=True,
+            operation=None, keep_alive=None, auto_reconnect=True,
             idle_timeout=None):
         """
         Add a receiver to the client with an epoch value. Only a single epoch receiver
@@ -519,7 +519,7 @@ class EventHubClient(object):
         self.clients.append(handler)
         return handler
 
-    def add_sender(self, partition=None, operation=None, send_timeout=60, keep_alive=30, auto_reconnect=True):
+    def add_sender(self, partition=None, operation=None, send_timeout=60, keep_alive=None, auto_reconnect=True):
         """
         Add a sender to the client to send EventData object to an EventHub.
 
