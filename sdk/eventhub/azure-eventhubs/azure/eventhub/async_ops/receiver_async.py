@@ -8,7 +8,7 @@ import uuid
 import logging
 import time
 
-from uamqp import errors, types
+from uamqp import errors, types, constants
 from uamqp import ReceiveClientAsync, Source
 
 from azure.eventhub import EventHubError, EventData
@@ -86,6 +86,8 @@ class AsyncReceiver(Receiver):
             keep_alive_interval=self.keep_alive,
             client_name=self.name,
             properties=self.client.create_properties(),
+            receive_settle_mode=constants.ReceiverSettleMode.ReceiveAndDelete,
+            auto_complete=False,
             loop=self.loop)
 
     async def open_async(self):
@@ -128,6 +130,8 @@ class AsyncReceiver(Receiver):
                 keep_alive_interval=self.keep_alive,
                 client_name=self.name,
                 properties=self.client.create_properties(),
+                receive_settle_mode=constants.ReceiverSettleMode.ReceiveAndDelete,
+                auto_complete=False,
                 loop=self.loop)
         await self._handler.open_async()
         while not await self._handler.client_ready_async():
@@ -154,6 +158,8 @@ class AsyncReceiver(Receiver):
             keep_alive_interval=self.keep_alive,
             client_name=self.name,
             properties=self.client.create_properties(),
+            receive_settle_mode=constants.ReceiverSettleMode.ReceiveAndDelete,
+            auto_complete=False,
             loop=self.loop)
         try:
             await self._handler.open_async()
