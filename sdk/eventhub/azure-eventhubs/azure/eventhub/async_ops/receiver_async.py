@@ -263,7 +263,7 @@ class AsyncReceiver(Receiver):
             self.error = EventHubError("This receive handler is now closed.")
         await self._handler.close_async()
 
-    async def receive(self, max_batch_size=None, timeout=None, reconnect_timeout=None, max_reconnect_retries=0):
+    async def receive(self, max_batch_size=None, timeout=None, reconnect_timeout=None, max_reconnect_retries=3):
         """
         Receive events asynchronously from the EventHub.
 

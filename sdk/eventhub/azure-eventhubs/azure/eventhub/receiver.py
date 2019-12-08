@@ -281,7 +281,7 @@ class Receiver(object):
             return self._handler._received_messages.qsize()
         return 0
 
-    def receive(self, max_batch_size=None, timeout=None, reconnect_timeout=None, max_reconnect_retries=0):
+    def receive(self, max_batch_size=None, timeout=None, reconnect_timeout=None, max_reconnect_retries=3):
         """
         Receive events from the EventHub.
 
