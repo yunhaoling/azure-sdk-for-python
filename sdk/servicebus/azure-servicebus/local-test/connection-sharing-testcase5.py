@@ -6,6 +6,7 @@ from concurrent.futures import ThreadPoolExecutor
 from uamqp import errors, c_uamqp
 from threading import RLock
 import gc
+import os
 
 
 #logging.basicConfig(level=logging.INFO)
@@ -20,6 +21,8 @@ azure_logger = logging.getLogger("azure.servicebus")
 
 logging.basicConfig(level=logging.DEBUG)
 
+conn_str = os.environ['SERVICE_BUS_CONNECTION_STR']
+queue_name = os.environ['SERVICE_BUS_QUEUE_NAME']
 
 lock = RLock()
 
