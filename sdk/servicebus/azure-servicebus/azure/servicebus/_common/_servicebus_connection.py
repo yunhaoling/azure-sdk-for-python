@@ -26,6 +26,13 @@ class SharedServiceBusConnection(object):
                 c_uamqp.ConnectionState.END,
                 c_uamqp.ConnectionState.ERROR
             ):
+                try:
+                    self._conn.lock()
+                    for handler in self._amqp_handlers:
+                        handler.close()
+                finally:
+                    self._conn.release()
+
                 self._amqp_handlers.clear()
                 self._conn.destroy()
                 self._conn = None
@@ -54,7 +61,11 @@ class SharedServiceBusConnection(object):
 
     def close_handler(self, amqp_handler):
         with self._lock:
-            amqp_handler.close()
+            try:
+                self._conn.lock()
+                amqp_handler.close()
+            finally:
+                self._conn.release()
             if amqp_handler in self._amqp_handlers:
                 self._amqp_handlers.remove(amqp_handler)
 
