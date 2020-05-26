@@ -240,12 +240,12 @@ class BaseHandler(object):  # pylint:disable=too-many-instance-attributes
         raise last_exception
 
     def _get_management_handler(self):
-        if self._connection:
+        if self._connection_sharing:
             return self._servicebus_client._get_management_handler(self._entity_uri)
         return self._handler
 
     def _close_management_handler(self):
-        if self._connection:
+        if self._connection_sharing:
             self._servicebus_client._close_management_handler(self._entity_uri)
         else:
             self._close_handler()
@@ -270,7 +270,10 @@ class BaseHandler(object):  # pylint:disable=too-many-instance-attributes
             application_properties=application_properties
         )
         try:
-            return self._get_management_handler().mgmt_request(
+            mgmt_handler = self._get_management_handler()
+            while not mgmt_handler.client_ready():
+                time.sleep(0.05)
+            return mgmt_handler.mgmt_request(
                 mgmt_msg,
                 mgmt_operation,
                 op_type=MGMT_REQUEST_OP_TYPE_ENTITY_MGMT,
@@ -299,7 +302,7 @@ class BaseHandler(object):  # pylint:disable=too-many-instance-attributes
 
     def _close_handler(self):
         if self._handler:
-            self._handler.close()
+            self._connection.close_handler(self._handler)
             self._handler = None
         self._running = False
 

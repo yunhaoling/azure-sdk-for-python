@@ -11,6 +11,7 @@ from uamqp import ReceiveClient, Source, types
 from uamqp.constants import SenderSettleMode, LinkCreationMode
 
 from ._base_handler import BaseHandler
+from ._common._servicebus_connection import SeparateServiceBusConnection
 from ._common.utils import create_authentication
 from ._common.message import PeekMessage, ReceivedMessage
 from ._common.constants import (
@@ -123,7 +124,8 @@ class ServiceBusReceiver(BaseHandler, ReceiverMixin):  # pylint: disable=too-man
             )
         self._message_iter = None
         self._create_attribute(**kwargs)
-        self._connection = kwargs.get("connection")
+        self._connection_sharing = kwargs.get("connection_sharing", False)
+        self._connection = kwargs.get("connection") or SeparateServiceBusConnection()
         self._prefetch = kwargs.get("prefetch")
 
     def __iter__(self):
@@ -148,7 +150,7 @@ class ServiceBusReceiver(BaseHandler, ReceiverMixin):  # pylint: disable=too-man
 
     def _create_handler(self, auth):
         link_creation_mode = LinkCreationMode.CreateLinkOnNewSession\
-            if self._connection else LinkCreationMode.TryCreateLinkOnExistingCbsSession
+            if self._connection_sharing else LinkCreationMode.TryCreateLinkOnExistingCbsSession
         self._handler = ReceiveClient(
             self._get_source(),
             auth=auth,
@@ -170,18 +172,20 @@ class ServiceBusReceiver(BaseHandler, ReceiverMixin):  # pylint: disable=too-man
         if self._running:
             return
         if self._handler:
-            self._handler.close()
+            self._close_handler()
 
-        auth = None if self._connection else create_authentication(self)
+        auth = None if self._connection_sharing else create_authentication(self)
         self._create_handler(auth)
         try:
-            self._handler.open(connection=(self._connection.get_connection() if self._connection else None))
+            self._connection.open_handler(self._handler)
+            #self._handler.open(connection=(self._connection.get_connection() if self._connection else None))
             self._message_iter = self._handler.receive_messages_iter()
             while not self._handler.client_ready():
                 time.sleep(0.05)
             self._running = True
-        except:
-            self.close()
+        except Exception as e:
+            self._close_handler()
+            #self.close()
             raise
 
     def _receive(self, max_batch_size=None, timeout=None):
@@ -193,7 +197,6 @@ class ServiceBusReceiver(BaseHandler, ReceiverMixin):  # pylint: disable=too-man
             max_batch_size=max_batch_size,
             timeout=timeout_ms
         )
-
         return [self._build_message(message) for message in batch]
 
     def _settle_message(self, settlement, lock_tokens, dead_letter_details=None):

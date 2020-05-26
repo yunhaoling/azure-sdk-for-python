@@ -6,15 +6,16 @@ from typing import Any, TYPE_CHECKING
 from threading import RLock
 import time
 
-from uamqp import AMQPClient
+from uamqp import AMQPClient, c_uamqp
 from uamqp.constants import LinkCreationMode
 
 from ._base_handler import _parse_conn_str, ServiceBusSharedKeyCredential
 from ._servicebus_sender import ServiceBusSender
 from ._servicebus_receiver import ServiceBusReceiver
 from ._servicebus_session_receiver import ServiceBusSessionReceiver
-from ._common._servicebus_connection import ServiceBusConnection
+from ._common._servicebus_connection import SeparateServiceBusConnection, SharedServiceBusConnection
 from ._common._configuration import Configuration
+from .exceptions import ServiceBusConnectionError
 
 if TYPE_CHECKING:
     from azure.core.credentials import TokenCredential
@@ -64,47 +65,60 @@ class ServiceBusClient(object):
         self.fully_qualified_namespace = fully_qualified_namespace
         self._credential = credential
         self._config = Configuration(**kwargs)
-        self._connection = None
         self._entity_name = kwargs.get("entity_name")
         self._auth_uri = "sb://{}".format(self.fully_qualified_namespace)
         if self._entity_name:
             self._auth_uri = "{}/{}".format(self._auth_uri, self._entity_name)
         # Internal flag for switching whether to apply connection sharing, pending fix in uamqp library
-        self._connection_sharing = True
+        self._connection_sharing = kwargs.get("connection_sharing", True)
+        self._connection = SharedServiceBusConnection(self) \
+            if self._connection_sharing else SeparateServiceBusConnection()
         self._mgmt_handlers = {}
         self._lock = RLock()
 
     def __enter__(self):
-        if self._connection_sharing:
-            self._create_uamqp_connection()
         return self
 
     def __exit__(self, *args):
         self.close()
 
-    def _create_uamqp_connection(self):
-        self._connection = ServiceBusConnection(self)
-
     def _get_management_handler(self, mgmt_target):
+        # pylint:disable=protected-access
         with self._lock:
-            if mgmt_target not in self._mgmt_handlers:
-                mgmt_handler = AMQPClient(
-                    mgmt_target,
-                    link_creation_mode=LinkCreationMode.CreateLinkOnNewSession,
-                    debug=self._config.logging_enable
-                )
-                mgmt_handler.open(connection=self._connection.get_connection())
-                while not mgmt_handler.client_ready():
-                    time.sleep(0.05)
+            if mgmt_target in self._mgmt_handlers and self._mgmt_handlers[mgmt_target]._connection in (
+                c_uamqp.ConnectionState.CLOSE_RCVD,
+                c_uamqp.ConnectionState.CLOSE_SENT,
+                c_uamqp.ConnectionState.DISCARDING,
+                c_uamqp.ConnectionState.END,
+                c_uamqp.ConnectionState.ERROR
+            ):
+                self._connection.close_handler(self._mgmt_handlers[mgmt_target])
+                del self._mgmt_handlers[mgmt_target]
+                #raise ServiceBusConnectionError("Management handler connection in wrong status")
 
-                self._mgmt_handlers[mgmt_target] = mgmt_handler
+            if mgmt_target not in self._mgmt_handlers:
+                try:
+                    mgmt_handler = AMQPClient(
+                        mgmt_target,
+                        link_creation_mode=LinkCreationMode.CreateLinkOnNewSession,
+                        debug=self._config.logging_enable
+                    )
+                    self._connection.open_handler(mgmt_handler)
+                    #mgmt_handler.open(connection=self._connection.get_connection())
+                    # while not mgmt_handler.client_ready():
+                    #     time.sleep(0.05)
+                    self._mgmt_handlers[mgmt_target] = mgmt_handler
+                except Exception as e:
+                    self._connection.close_handler(mgmt_handler)
+                    raise
 
             return self._mgmt_handlers[mgmt_target]
 
     def _close_management_handler(self, mgmt_target):
         with self._lock:
             if mgmt_target in self._mgmt_handlers:
-                self._mgmt_handlers[mgmt_target].close()
+                self._connection.close_handler(self._mgmt_handlers[mgmt_target])
+                #self._mgmt_handlers[mgmt_target].close()
                 del self._mgmt_handlers[mgmt_target]
 
     def close(self):
@@ -186,6 +200,7 @@ class ServiceBusClient(object):
             logging_enable=self._config.logging_enable,
             transport_type=self._config.transport_type,
             http_proxy=self._config.http_proxy,
+            connection_sharing=self._connection_sharing,
             connection=self._connection,
             servicebus_client=self,
             **kwargs

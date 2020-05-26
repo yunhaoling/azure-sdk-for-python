@@ -13,6 +13,7 @@ from uamqp.constants import LinkCreationMode
 
 from ._base_handler import BaseHandler
 from ._common import mgmt_handlers
+from ._common._servicebus_connection import SeparateServiceBusConnection
 from ._common.message import Message, BatchMessage
 from .exceptions import (
     OperationTimeoutError,
@@ -150,11 +151,12 @@ class ServiceBusSender(BaseHandler, SenderMixin):
 
         self._max_message_size_on_link = 0
         self._create_attribute()
-        self._connection = kwargs.get("connection")
+        self._connection_sharing = kwargs.get("connection_sharing", False)
+        self._connection = kwargs.get("connection") or SeparateServiceBusConnection()
 
     def _create_handler(self, auth):
         link_creation_mode = LinkCreationMode.CreateLinkOnNewSession\
-            if self._connection else LinkCreationMode.TryCreateLinkOnExistingCbsSession
+            if self._connection_sharing else LinkCreationMode.TryCreateLinkOnExistingCbsSession
         self._handler = SendClient(
             self._entity_uri,
             auth=auth,
@@ -171,19 +173,21 @@ class ServiceBusSender(BaseHandler, SenderMixin):
         if self._running:
             return
         if self._handler:
-            self._handler.close()
+            self._close_handler()
 
-        auth = None if self._connection else create_authentication(self)
+        auth = None if self._connection_sharing else create_authentication(self)
         self._create_handler(auth)
         try:
-            self._handler.open(connection=(self._connection.get_connection() if self._connection else None))
+            self._connection.open_handler(self._handler)
+            #self._handler.open(connection=(self._connection.get_connection() if self._connection else None))
             while not self._handler.client_ready():
                 time.sleep(0.05)
             self._running = True
             self._max_message_size_on_link = self._handler.message_handler._link.peer_max_message_size \
                                              or uamqp.constants.MAX_MESSAGE_LENGTH_BYTES
         except:
-            self.close()
+            self._close_handler()
+            # self.close()
             raise
 
     def _send(self, message, timeout=None, last_exception=None):

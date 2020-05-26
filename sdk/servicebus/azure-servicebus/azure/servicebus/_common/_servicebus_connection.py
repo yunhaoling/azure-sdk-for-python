@@ -9,10 +9,11 @@ from uamqp import Connection, c_uamqp
 from .utils import create_authentication
 
 
-class ServiceBusConnection(object):
+class SharedServiceBusConnection(object):
     def __init__(self, client):
         self._conn = None
         self._client = client
+        self._amqp_handlers = []
         self._lock = RLock()
 
     def get_connection(self):
@@ -25,6 +26,7 @@ class ServiceBusConnection(object):
                 c_uamqp.ConnectionState.END,
                 c_uamqp.ConnectionState.ERROR
             ):
+                self._amqp_handlers.clear()
                 self._conn.destroy()
                 self._conn = None
 
@@ -35,10 +37,40 @@ class ServiceBusConnection(object):
                     auth,
                     debug=self._client._config.logging_enable  # pylint:disable=protected-access
                 )
-
-            return self._conn
+        return self._conn
 
     def close(self):
         with self._lock:
+            self._amqp_handlers.clear()
             self._conn.destroy()
             self._conn = None
+
+    def open_handler(self, amqp_handler):
+        amqp_handler.open(self.get_connection())
+
+        with self._lock:
+            if amqp_handler not in self._amqp_handlers:
+                self._amqp_handlers.append(amqp_handler)
+
+    def close_handler(self, amqp_handler):
+        with self._lock:
+            amqp_handler.close()
+            if amqp_handler in self._amqp_handlers:
+                self._amqp_handlers.remove(amqp_handler)
+
+
+class SeparateServiceBusConnection(object):
+    def __init__(self):
+        pass
+
+    def get_connection(self):
+        pass
+
+    def close(self):
+        pass
+
+    def open_handler(self, amqp_handler):
+        amqp_handler.open()
+
+    def close_handler(self, amqp_handler):
+        amqp_handler.close()
