@@ -180,8 +180,8 @@ class ServiceBusSender(BaseHandler, SenderMixin):
         try:
             self._connection.open_handler(self._handler)
             #self._handler.open(connection=(self._connection.get_connection() if self._connection else None))
-            while not self._handler.client_ready():
-                time.sleep(0.05)
+            # while not self._handler.client_ready():
+            #     time.sleep(0.05)
             self._running = True
             self._max_message_size_on_link = self._handler.message_handler._link.peer_max_message_size \
                                              or uamqp.constants.MAX_MESSAGE_LENGTH_BYTES

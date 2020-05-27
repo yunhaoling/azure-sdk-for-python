@@ -180,8 +180,8 @@ class ServiceBusReceiver(BaseHandler, ReceiverMixin):  # pylint: disable=too-man
             self._connection.open_handler(self._handler)
             #self._handler.open(connection=(self._connection.get_connection() if self._connection else None))
             self._message_iter = self._handler.receive_messages_iter()
-            while not self._handler.client_ready():
-                time.sleep(0.05)
+            # while not self._handler.client_ready():
+            #     time.sleep(0.05)
             self._running = True
         except Exception as e:
             self._close_handler()

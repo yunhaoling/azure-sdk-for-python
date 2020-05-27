@@ -9,8 +9,6 @@ import gc
 import os
 
 
-#logging.basicConfig(level=logging.INFO)
-
 logger = logging.getLogger("uamqp")
 #logger.setLevel(logging.CRITICAL)
 logger.disabled = True
@@ -19,7 +17,7 @@ azure_logger = logging.getLogger("azure.servicebus")
 #azure_logger.setLevel(logging.CRITICAL)
 #azure_logger.addHandler(logging.StreamHandler())
 
-logging.basicConfig(level=logging.DEBUG)
+#logging.basicConfig(level=logging.DEBUG)
 
 conn_str = os.environ['SERVICE_BUS_CONNECTION_STR']
 queue_name = os.environ['SERVICE_BUS_QUEUE_NAME']
@@ -81,7 +79,7 @@ with ServiceBusClient.from_connection_string(
                     sender.send(msg)
                     print(id_dict[id(sender)] + '----- send message done')
 
-                    with sb_client._lock:
+                    with sb_client._connection._lock:
                         sb_client._connection._conn._error = errors.ConnectionClose(b"amqp:internal-error")
                         sb_client._connection._conn._state = c_uamqp.ConnectionState.ERROR
                     gc.collect()
@@ -121,9 +119,7 @@ with ServiceBusClient.from_connection_string(
     #     assert sender_1._connection._conn and sender_2._connection._conn and receiver_1._connection._conn and receiver_2._connection._conn
     #     assert sender_1._connection._conn == receiver_1._connection._conn == sender_2._connection._conn == receiver_2._connection._conn
 
-
-
-    with ThreadPoolExecutor(max_workers=10) as executor:
+    with ThreadPoolExecutor(max_workers=12) as executor:
         send_future1 = executor.submit(send, sender_1)
         send_future2 = executor.submit(send, sender_2)
         send_future3 = executor.submit(send, sender_3)

@@ -13,9 +13,12 @@ from ._base_handler import _parse_conn_str, ServiceBusSharedKeyCredential
 from ._servicebus_sender import ServiceBusSender
 from ._servicebus_receiver import ServiceBusReceiver
 from ._servicebus_session_receiver import ServiceBusSessionReceiver
-from ._common._servicebus_connection import SeparateServiceBusConnection, SharedServiceBusConnection
+from ._common._servicebus_connection import (
+    SeparateServiceBusConnection,
+    SharedServiceBusConnection,
+    CONNECTION_END_STATUS
+)
 from ._common._configuration import Configuration
-from .exceptions import ServiceBusConnectionError
 
 if TYPE_CHECKING:
     from azure.core.credentials import TokenCredential
@@ -75,6 +78,7 @@ class ServiceBusClient(object):
             if self._connection_sharing else SeparateServiceBusConnection()
         self._mgmt_handlers = {}
         self._lock = RLock()
+        self._mgmt_locks = {}
 
     def __enter__(self):
         return self
@@ -84,35 +88,33 @@ class ServiceBusClient(object):
 
     def _get_management_handler(self, mgmt_target):
         # pylint:disable=protected-access
-        with self._lock:
-            if mgmt_target in self._mgmt_handlers and self._mgmt_handlers[mgmt_target]._connection in (
-                c_uamqp.ConnectionState.CLOSE_RCVD,
-                c_uamqp.ConnectionState.CLOSE_SENT,
-                c_uamqp.ConnectionState.DISCARDING,
-                c_uamqp.ConnectionState.END,
-                c_uamqp.ConnectionState.ERROR
-            ):
-                self._connection.close_handler(self._mgmt_handlers[mgmt_target])
-                del self._mgmt_handlers[mgmt_target]
-                #raise ServiceBusConnectionError("Management handler connection in wrong status")
-
-            if mgmt_target not in self._mgmt_handlers:
-                try:
-                    mgmt_handler = AMQPClient(
-                        mgmt_target,
-                        link_creation_mode=LinkCreationMode.CreateLinkOnNewSession,
-                        debug=self._config.logging_enable
-                    )
-                    self._connection.open_handler(mgmt_handler)
-                    #mgmt_handler.open(connection=self._connection.get_connection())
-                    # while not mgmt_handler.client_ready():
-                    #     time.sleep(0.05)
-                    self._mgmt_handlers[mgmt_target] = mgmt_handler
-                except Exception as e:
-                    self._connection.close_handler(mgmt_handler)
-                    raise
-
-            return self._mgmt_handlers[mgmt_target]
+        #with self._lock:
+            # if mgmt_target in self._mgmt_handlers and\
+            #         self._mgmt_handlers[mgmt_target]._connection in CONNECTION_END_STATUS:
+            #     try:
+            #         self._mgmt_handlers[mgmt_target]._connection.lock(-1)
+            #         self._mgmt_handlers[mgmt_target].close()
+            #     finally:
+            #         self._mgmt_handlers[mgmt_target]._connection.release()
+            #         del self._mgmt_handlers[mgmt_target]
+        if mgmt_target not in self._mgmt_handlers:
+            try:
+                mgmt_handler = AMQPClient(
+                    mgmt_target,
+                    link_creation_mode=LinkCreationMode.CreateLinkOnNewSession,
+                    debug=self._config.logging_enable
+                )
+                self._connection.open_handler(mgmt_handler)
+                #mgmt_handler.open(connection=self._connection.get_connection())
+                # while not mgmt_handler.client_ready():
+                #     time.sleep(0.05)
+                self._mgmt_handlers[mgmt_target] = mgmt_handler
+                self._mgmt_locks[mgmt_target] = RLock()
+            except Exception as e:
+                self._connection.close_handler(mgmt_handler)
+                #self._connection.close_handler(mgmt_handler)
+                raise
+        return self._mgmt_handlers[mgmt_target]
 
     def _close_management_handler(self, mgmt_target):
         with self._lock:
@@ -120,6 +122,20 @@ class ServiceBusClient(object):
                 self._connection.close_handler(self._mgmt_handlers[mgmt_target])
                 #self._mgmt_handlers[mgmt_target].close()
                 del self._mgmt_handlers[mgmt_target]
+                del self._mgmt_locks[mgmt_target]
+
+    def _mgmt_request(self, mgmt_target, mgmt_msg, mgmt_operation, **kwargs):
+        with self._lock:
+            mgmt_handler = self._get_management_handler(mgmt_target)
+            mgmt_lock = self._mgmt_locks[mgmt_target]
+        with mgmt_lock:
+            # while not mgmt_handler.client_ready():
+            #     time.sleep(0.05)
+            return mgmt_handler.mgmt_request(
+                mgmt_msg,
+                mgmt_operation,
+                **kwargs
+            )
 
     def close(self):
         # type: () -> None
@@ -248,6 +264,7 @@ class ServiceBusClient(object):
             logging_enable=self._config.logging_enable,
             transport_type=self._config.transport_type,
             http_proxy=self._config.http_proxy,
+            connection_sharing=self._connection_sharing,
             connection=self._connection,
             servicebus_client=self,
             **kwargs
@@ -282,6 +299,7 @@ class ServiceBusClient(object):
             logging_enable=self._config.logging_enable,
             transport_type=self._config.transport_type,
             http_proxy=self._config.http_proxy,
+            connection_sharing=self._connection_sharing,
             connection=self._connection,
             servicebus_client=self,
             **kwargs
@@ -333,6 +351,7 @@ class ServiceBusClient(object):
             logging_enable=self._config.logging_enable,
             transport_type=self._config.transport_type,
             http_proxy=self._config.http_proxy,
+            connection_sharing=self._connection_sharing,
             connection=self._connection,
             servicebus_client=self,
             **kwargs
@@ -387,6 +406,7 @@ class ServiceBusClient(object):
             logging_enable=self._config.logging_enable,
             transport_type=self._config.transport_type,
             http_proxy=self._config.http_proxy,
+            connection_sharing=self._connection_sharing,
             connection=self._connection,
             session_id=session_id,
             servicebus_client=self,
@@ -438,6 +458,7 @@ class ServiceBusClient(object):
             queue_name=queue_name,
             credential=self._credential,
             logging_enable=self._config.logging_enable,
+            connection_sharing=self._connection_sharing,
             connection=self._connection,
             session_id=session_id,
             transport_type=self._config.transport_type,

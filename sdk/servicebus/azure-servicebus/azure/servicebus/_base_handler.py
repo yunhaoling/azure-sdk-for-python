@@ -6,6 +6,7 @@ import collections
 import logging
 import uuid
 import time
+import traceback
 from datetime import timedelta
 from typing import cast, Optional, Tuple, TYPE_CHECKING, Dict, Any
 
@@ -270,17 +271,28 @@ class BaseHandler(object):  # pylint:disable=too-many-instance-attributes
             application_properties=application_properties
         )
         try:
-            mgmt_handler = self._get_management_handler()
-            while not mgmt_handler.client_ready():
-                time.sleep(0.05)
-            return mgmt_handler.mgmt_request(
-                mgmt_msg,
-                mgmt_operation,
-                op_type=MGMT_REQUEST_OP_TYPE_ENTITY_MGMT,
-                node=self._mgmt_target.encode(self._config.encoding),
-                timeout=5000,
-                callback=callback
-            )
+            if self._connection_sharing:
+                return self._servicebus_client._mgmt_request(
+                    self._entity_uri,
+                    mgmt_msg,
+                    mgmt_operation,
+                    op_type=MGMT_REQUEST_OP_TYPE_ENTITY_MGMT,
+                    node=self._mgmt_target.encode(self._config.encoding),
+                    timeout=5000,
+                    callback=callback
+                )
+            else:
+                mgmt_handler = self._handler
+                while not mgmt_handler.client_ready():
+                    time.sleep(0.05)
+                return mgmt_handler.mgmt_request(
+                    mgmt_msg,
+                    mgmt_operation,
+                    op_type=MGMT_REQUEST_OP_TYPE_ENTITY_MGMT,
+                    node=self._mgmt_target.encode(self._config.encoding),
+                    timeout=5000,
+                    callback=callback
+                )
         except Exception as exp:  # pylint: disable=broad-except
             raise ServiceBusError("Management request failed: {}".format(exp), exp)
 
