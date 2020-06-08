@@ -117,12 +117,12 @@ class ServiceBusClient(object):
         return self._mgmt_handlers[mgmt_target]
 
     def _close_management_handler(self, mgmt_target):
-        with self._lock:
-            if mgmt_target in self._mgmt_handlers:
+        if mgmt_target in self._mgmt_handlers:
+            with self._mgmt_locks[mgmt_target]:
                 self._connection.close_handler(self._mgmt_handlers[mgmt_target])
-                #self._mgmt_handlers[mgmt_target].close()
-                del self._mgmt_handlers[mgmt_target]
-                del self._mgmt_locks[mgmt_target]
+        with self._lock:
+            del self._mgmt_handlers[mgmt_target]
+            del self._mgmt_locks[mgmt_target]
 
     def _mgmt_request(self, mgmt_target, mgmt_msg, mgmt_operation, **kwargs):
         with self._lock:
