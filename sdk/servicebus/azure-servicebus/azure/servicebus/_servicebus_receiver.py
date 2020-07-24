@@ -87,6 +87,9 @@ class ServiceBusReceiver(BaseHandler, ReceiverMixin):  # pylint: disable=too-man
      The default value is 0, meaning messages will be received from the service and processed one at a time.
      In the case of prefetch being 0, `ServiceBusReceiver.receive` would try to cache `max_batch_size` (if provided)
      within its request to the service.
+    :keyword int keep_alive: The time interval in seconds between pinging the connection to keep it alive during
+     periods of inactivity. The default value is 30 seconds. If set to `None`, the connection will not
+     be pinged.
 
     .. admonition:: Example:
 
@@ -167,7 +170,8 @@ class ServiceBusReceiver(BaseHandler, ReceiverMixin):  # pylint: disable=too-man
             receive_settle_mode=self._mode.value,
             send_settle_mode=SenderSettleMode.Settled if self._mode == ReceiveSettleMode.ReceiveAndDelete else None,
             timeout=self._idle_timeout * 1000 if self._idle_timeout else 0,
-            prefetch=self._prefetch
+            prefetch=self._prefetch,
+            keep_alive_interval=self._config.keep_alive
         )
 
     def _open(self):
@@ -299,6 +303,9 @@ class ServiceBusReceiver(BaseHandler, ReceiverMixin):  # pylint: disable=too-man
          The default value is 0, meaning messages will be received from the service and processed one at a time.
          In the case of prefetch being 0, `ServiceBusReceiver.receive` would try to cache `max_batch_size` (if provided)
          within its request to the service.
+        :keyword int keep_alive: The time interval in seconds between pinging the connection to keep it alive during
+         periods of inactivity. The default value is 30 seconds. If set to `None`, the connection will not
+         be pinged.
         :rtype: ~azure.servicebus.ServiceBusReceiver
 
         .. admonition:: Example:

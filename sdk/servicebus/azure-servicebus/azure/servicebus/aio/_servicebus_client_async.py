@@ -43,6 +43,9 @@ class ServiceBusClient(object):
      keys: `'proxy_hostname'` (str value) and `'proxy_port'` (int value).
      Additionally the following keys may also be present: `'username', 'password'`.
     :keyword str user_agent: If specified, this will be added in front of the built-in user agent string.
+    :keyword int keep_alive: The time interval in seconds between pinging the connection to keep it alive during
+     periods of inactivity. The default value is 30 seconds. If set to `None`, the connection will not
+     be pinged.
 
     .. admonition:: Example:
 
@@ -109,6 +112,9 @@ class ServiceBusClient(object):
          keys: `'proxy_hostname'` (str value) and `'proxy_port'` (int value).
          Additionally the following keys may also be present: `'username', 'password'`.
         :keyword str user_agent: If specified, this will be added in front of the built-in user agent string.
+        :keyword int keep_alive: The time interval in seconds between pinging the connection to keep it alive during
+         periods of inactivity. The default value is 30 seconds. If set to `None`, the connection will not
+         be pinged.
         :rtype: ~azure.servicebus.aio.ServiceBusClient
 
         .. admonition:: Example:
@@ -168,6 +174,7 @@ class ServiceBusClient(object):
             http_proxy=self._config.http_proxy,
             connection=self._connection,
             user_agent=self._config.user_agent,
+            keep_alive=self._config.keep_alive,
             **kwargs
         )
 
@@ -215,6 +222,7 @@ class ServiceBusClient(object):
             http_proxy=self._config.http_proxy,
             connection=self._connection,
             user_agent=self._config.user_agent,
+            keep_alive=self._config.keep_alive,
             **kwargs
         )
 
@@ -276,6 +284,7 @@ class ServiceBusClient(object):
             connection=self._connection,
             is_dead_letter_receiver=True,
             user_agent=self._config.user_agent,
+            keep_alive=self._config.keep_alive,
             **kwargs
         )
 
@@ -310,6 +319,7 @@ class ServiceBusClient(object):
             http_proxy=self._config.http_proxy,
             connection=self._connection,
             user_agent=self._config.user_agent,
+            keep_alive=self._config.keep_alive,
             **kwargs
         )
 
@@ -364,6 +374,7 @@ class ServiceBusClient(object):
             http_proxy=self._config.http_proxy,
             connection=self._connection,
             user_agent=self._config.user_agent,
+            keep_alive=self._config.keep_alive,
             **kwargs
         )
 
@@ -427,6 +438,7 @@ class ServiceBusClient(object):
             connection=self._connection,
             is_dead_letter_receiver=True,
             user_agent=self._config.user_agent,
+            keep_alive=self._config.keep_alive,
             **kwargs
         )
 
@@ -485,6 +497,7 @@ class ServiceBusClient(object):
             connection=self._connection,
             session_id=session_id,
             user_agent=self._config.user_agent,
+            keep_alive=self._config.keep_alive,
             **kwargs
         )
 
@@ -536,5 +549,6 @@ class ServiceBusClient(object):
             transport_type=self._config.transport_type,
             http_proxy=self._config.http_proxy,
             user_agent=self._config.user_agent,
+            keep_alive=self._config.keep_alive,
             **kwargs
         )

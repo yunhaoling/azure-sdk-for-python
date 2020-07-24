@@ -59,6 +59,9 @@ class ServiceBusSender(BaseHandler, SenderMixin):
      keys: `'proxy_hostname'` (str value) and `'proxy_port'` (int value).
      Additionally the following keys may also be present: `'username', 'password'`.
     :keyword str user_agent: If specified, this will be added in front of the built-in user agent string.
+    :keyword int keep_alive: The time interval in seconds between pinging the connection to keep it alive during
+     periods of inactivity. The default value is 30 seconds. If set to `None`, the connection will not
+     be pinged.
 
     .. admonition:: Example:
 
@@ -109,7 +112,8 @@ class ServiceBusSender(BaseHandler, SenderMixin):
             properties=self._properties,
             error_policy=self._error_policy,
             client_name=self._name,
-            encoding=self._config.encoding
+            encoding=self._config.encoding,
+            keep_alive_interval=self._config.keep_alive
         )
 
     async def _open(self):
@@ -220,6 +224,9 @@ class ServiceBusSender(BaseHandler, SenderMixin):
          keys: `'proxy_hostname'` (str value) and `'proxy_port'` (int value).
          Additionally the following keys may also be present: `'username', 'password'`.
         :keyword str user_agent: If specified, this will be added in front of the built-in user agent string.
+        :keyword int keep_alive: The time interval in seconds between pinging the connection to keep it alive during
+         periods of inactivity. The default value is 30 seconds. If set to `None`, the connection will not
+         be pinged.
         :rtype: ~azure.servicebus.aio.ServiceBusSender
 
         .. admonition:: Example:
