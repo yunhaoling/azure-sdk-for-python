@@ -92,7 +92,7 @@ class ServiceBusSessionReceiver(ServiceBusReceiver, SessionReceiverMixin):
         Get the ServiceBusSession object linked with the receiver. Session is only available to session-enabled
         entities.
 
-        :rtype: ~azure.servicebus.ServiceBusSession
+        :rtype: ~azure.servicebus._servicebus_session.ServiceBusSession
 
         .. admonition:: Example:
 

@@ -2,6 +2,10 @@
 
 ## 7.0.0b8 (Unreleased)
 
+**Breaking Changes**
+
+* Removed `ServceiBusSession` export from `azure.servicebus` and `azure.servicebus.aio`.
+
 **New Features**
 
 * Added support for `timeout` parameter on the following operations:

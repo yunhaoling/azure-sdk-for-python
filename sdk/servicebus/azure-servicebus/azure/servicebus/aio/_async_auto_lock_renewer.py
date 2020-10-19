@@ -122,7 +122,7 @@ class AutoLockRenew:
         """Register a renewable entity for automatic lock renewal.
 
         :param renewable: A locked entity that needs to be renewed.
-        :type renewable: Union[~azure.servicebus.aio.ReceivedMessage,~azure.servicebus.aio.ServiceBusSession]
+        :type renewable: Union[~azure.servicebus.aio.ReceivedMessage,~azure.servicebus.aio._servicebus_session_async.ServiceBusSession]
         :param float timeout: A time in seconds that the lock should be maintained for.
          Default value is 300 (5 minutes).
         :param Optional[AsyncLockRenewFailureCallback] on_lock_renew_failure:
